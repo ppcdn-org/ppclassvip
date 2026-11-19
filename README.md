@@ -18,6 +18,8 @@
 - 教师端录屏：学生同意、分片接收/续传、finalize、回放下载
 - PPCDN 媒体凭据：封装 `internal/ppcdn`，调用 ppcenter 的 publish/play 签发接口
 - 限流、审计日志、日志脱敏、过期房间/邀请/录屏/附件清理 reaper
+- Windows 远程桌面 Agent：学生授权、只读/控制、断线重连与自动更新
+- 独立管理后台：用户、课堂、录屏、附件、审计与系统设置
 - 种子用户命令、MySQL 8 本地 compose
 
 ## 目录
@@ -26,6 +28,8 @@
 cmd/
   server/            HTTP 服务入口
   seed/              创建/更新教师或管理员
+  agent/             Windows 远程桌面 Agent
+  agent-installer/   Agent 安装器
 internal/
   api/               路由、登录、健康检查、响应
   auth/              密码哈希、JWT
@@ -35,12 +39,16 @@ internal/
   middleware/        请求 ID、日志、恢复、CORS、鉴权、限流
   model/             GORM 模型
   ppcdn/             ppcenter 媒体凭据客户端
+  realtime/          WebSocket Hub 与远程控制通道
   reaper/            过期课堂/录屏/附件清理
+  settings/          课堂配额与限流动态配置
   storage/           本地附件与录屏分片存储
   store/             数据访问
   version/           构建版本
 configs/config.yaml  本地开发配置
 docs/roadmap/        产品与技术规划
+ppclass-web/         教师/学生课堂前端（React + Vite）
+ppclass-admin/       管理后台前端（React + Vite）
 ```
 
 ## 快速开始
@@ -164,6 +172,9 @@ curl http://localhost:18080/api/v1/auth/me \
 | GET | `/api/v1/ping` | 存活探针 |
 | POST | `/api/v1/auth/login` | 教师/管理员登录 |
 | GET | `/api/v1/auth/me` | 当前登录用户 |
+| POST | `/api/v1/auth/change-password` | 修改当前用户密码 |
+| POST | `/api/v1/agent/pair` | Agent 换取远程桌面连接凭据 |
+| POST | `/api/v1/agent/stop` | Agent 主动停止远程桌面会话 |
 | POST | `/api/v1/classrooms` | 教师创建课堂 |
 | GET | `/api/v1/classrooms` | 教师课堂列表 |
 | POST | `/api/v1/classrooms/:id/invite` | 生成学生邀请 token |
@@ -175,11 +186,18 @@ curl http://localhost:18080/api/v1/auth/me \
 | GET | `/api/v1/classrooms/:id/messages` | 消息列表，支持 `afterId` / `beforeId` / `limit` |
 | GET | `/api/v1/classrooms/:id/ws` | 课堂 WebSocket，room token 走子协议 |
 | POST | `/api/v1/classrooms/:id/end` | 教师结束课堂 |
+| DELETE | `/api/v1/classrooms/:id` | 删除课堂 |
 | POST | `/api/v1/classrooms/:id/media/refresh` | 续签摄像头/屏幕媒体凭据 |
 | POST | `/api/v1/classrooms/:id/screen/start` | 申请屏幕共享推流凭据 |
 | POST | `/api/v1/classrooms/:id/screen/stop` | 停止屏幕共享 |
 | POST | `/api/v1/classrooms/:id/control` | 教师控制：静音/屏幕权限/聊天 |
 | GET | `/api/v1/classrooms/:id/audit` | 教师查看课堂审计 |
+| POST | `/api/v1/classrooms/:id/remote-desktop/request` | 教师发起远程桌面申请 |
+| POST | `/api/v1/classrooms/:id/remote-desktop/:sid/consent` | 学生同意远程桌面 |
+| POST | `/api/v1/classrooms/:id/remote-desktop/:sid/decline` | 学生拒绝远程桌面 |
+| POST | `/api/v1/classrooms/:id/remote-desktop/:sid/stop` | 停止远程桌面会话 |
+| GET | `/api/v1/classrooms/:id/remote-desktop/:sid` | 查询远程桌面会话 |
+| GET | `/api/v1/classrooms/:id/remote-desktop/:sid/control` | 远程控制 WebSocket |
 | POST | `/api/v1/classrooms/:id/attachments` | 上传图片/文件附件 |
 | GET | `/api/v1/classrooms/:id/attachments/:aid` | 查询附件元数据 |
 | GET | `/api/v1/classrooms/:id/attachments/:aid/download` | 下载附件，`?token=` 传 room token |
@@ -192,6 +210,27 @@ curl http://localhost:18080/api/v1/auth/me \
 | POST | `/api/v1/classrooms/:id/recordings/:rid/abort` | 中止录屏 |
 | GET | `/api/v1/classrooms/:id/recordings` | 课堂录屏列表 |
 | GET | `/api/v1/classrooms/:id/recordings/:rid/download` | 教师下载/回放录屏，`?token=` 传 room token |
+
+### 管理后台 API
+
+以下接口需要 `admin` 角色：
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/v1/admin/dashboard` | 运营概览 |
+| GET | `/api/v1/admin/users` | 用户列表 |
+| POST | `/api/v1/admin/users` | 创建教师/管理员 |
+| PUT | `/api/v1/admin/users/:id` | 修改昵称/角色/状态/重置密码 |
+| GET | `/api/v1/admin/classrooms` | 课堂列表 |
+| GET | `/api/v1/admin/classrooms/:id` | 课堂详情 |
+| POST | `/api/v1/admin/classrooms/:id/end` | 管理员结束课堂 |
+| GET | `/api/v1/admin/recordings` | 录屏列表 |
+| DELETE | `/api/v1/admin/recordings/:id` | 删除录屏 |
+| GET | `/api/v1/admin/attachments` | 附件列表 |
+| DELETE | `/api/v1/admin/attachments/:id` | 删除附件 |
+| GET | `/api/v1/admin/audit` | 全局审计日志 |
+| GET | `/api/v1/admin/settings` | 读取课堂配额与限流设置 |
+| PUT | `/api/v1/admin/settings` | 更新课堂配额与限流设置 |
 
 ## WebSocket
 
@@ -273,14 +312,23 @@ const ws = new WebSocket(
 
 | 环境变量 | 说明 |
 | --- | --- |
+| `PPCLASS_APP_NAME` | 应用名，默认 `PPClassVip` |
 | `PPCLASS_ENV` | `dev` / `prod` |
 | `PPCLASS_HTTP_ADDR` | 监听地址，默认 `:18080` |
+| `PPCLASS_HTTP_READ_TIMEOUT` | 读超时，默认 `15s` |
+| `PPCLASS_HTTP_WRITE_TIMEOUT` | 写超时，默认 `15s` |
+| `PPCLASS_HTTP_SHUTDOWN_TIMEOUT` | 优雅关闭超时，默认 `10s` |
 | `PPCLASS_MYSQL_DSN` | MySQL DSN |
+| `PPCLASS_MYSQL_MAX_OPEN_CONNS` | 最大连接数，默认 `20` |
+| `PPCLASS_MYSQL_MAX_IDLE_CONNS` | 最大空闲连接数，默认 `10` |
+| `PPCLASS_MYSQL_CONN_MAX_LIFETIME` | 连接最大存活时间，默认 `30m` |
+| `PPCLASS_MYSQL_CONN_MAX_IDLE_TIME` | MySQL 空闲连接时间，默认 `60s` |
+| `PPCLASS_MYSQL_AUTO_MIGRATE` | 是否自动迁移表结构，默认 `true` |
 | `PPCLASS_JWT_SECRET` | JWT 密钥，生产至少 32 位 |
+| `PPCLASS_AUTH_ISSUER` | JWT issuer，默认 `ppclassvip` |
 | `PPCLASS_AUTH_ACCESS_TTL` | 教师 access token 有效期，如 `24h` |
 | `PPCLASS_CLASSROOM_INVITE_TTL` | 学生邀请有效期，默认 `24h` |
 | `PPCLASS_CLASSROOM_ROOM_TOKEN_TTL` | 课堂 room token 有效期，默认 `12h` |
-| `PPCLASS_MYSQL_CONN_MAX_IDLE_TIME` | MySQL 空闲连接时间，默认 `60s` |
 | `PPCLASS_LOG_LEVEL` | `debug` / `info` / `warn` / `error` |
 | `PPCLASS_LOG_FORMAT` | `text` / `json` |
 | `PPCLASS_HTTP_CORS_ORIGINS` | 逗号分隔的前端源 |
@@ -297,6 +345,8 @@ const ws = new WebSocket(
 | `PPCLASS_CLASSROOM_UPLOAD_RATE_PER_MINUTE` | 每人每分钟上传数 |
 | `PPCLASS_CLASSROOM_INVITE_RATE_PER_MINUTE` | 每 IP 每分钟邀请/游客加入数 |
 | `PPCLASS_STORAGE_DATA_DIR` | 本地存储根目录，默认 `./data` |
+| `PPCLASS_STORAGE_ATTACHMENT_DIR` | 附件目录，默认 `{dataDir}/attachments` |
+| `PPCLASS_STORAGE_RECORDING_DIR` | 录屏目录，默认 `{dataDir}/recordings` |
 | `PPCLASS_PPCDN_ENABLED` | 是否启用 PPCDN 媒体凭据 |
 | `PPCLASS_PPCDN_BASE_URL` | ppcenter 地址，如 `https://api.pp-cdn.org` |
 | `PPCLASS_PPCDN_APP_ID` | 单机构课堂媒体 appId |
