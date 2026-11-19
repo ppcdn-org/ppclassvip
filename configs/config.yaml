@@ -1,0 +1,58 @@
+app:
+  name: PPClassVip
+  env: dev
+
+http:
+  addr: ":18080"
+  readTimeout: 15s
+  writeTimeout: 15s
+  shutdownTimeout: 10s
+  corsOrigins:
+    - http://localhost:5173
+    - http://127.0.0.1:5173
+
+log:
+  level: info
+  format: text
+
+mysql:
+  dsn: ""
+  maxOpenConns: 20
+  maxIdleConns: 10
+  connMaxLifetime: 30m
+  connMaxIdleTime: 60s
+  autoMigrate: true
+
+auth:
+  issuer: ppclassvip
+  accessTTL: 24h
+
+classroom:
+  inviteTTL: 24h
+  roomTokenTTL: 12h
+  consentTTL: 60s
+  idleTTL: 4h
+  maxFileBytes: 52428800
+  maxImageBytes: 10485760
+  roomQuotaBytes: 524288000
+  maxChunkBytes: 8388608
+  maxRecordingBytes: 4294967296
+  attachmentRetention: 8760h
+  recordingRetention: 2160h
+  messageRatePerMinute: 120
+  uploadRatePerMinute: 30
+  inviteRatePerMinute: 30
+
+storage:
+  dataDir: ./data
+
+ppcdn:
+  enabled: false
+  baseUrl: ""
+  appId: ""
+  appSecret: ""
+  keyId: default
+  deviceId: ""
+  region: ""
+  timeout: 10s
+  mediaTTL: 10m

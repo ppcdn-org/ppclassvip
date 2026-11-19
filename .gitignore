@@ -1,0 +1,27 @@
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Build output
+bin/
+dist/
+*.exe
+
+# Runtime data
+data/
+logs/
+tmp/
+*.log
+
+# Test output
+coverage.out
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local config overrides
+configs/config.local.yaml
