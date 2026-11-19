@@ -3,10 +3,12 @@
 | 属性 | 值 |
 | --- | --- |
 | 文档状态 | 草案（roadmap，待评审）。独立后端已落地 Go 框架 + 课堂房间/邀请/游客加入/文字消息/实时 WS/结束 |
-| 目标 | 基于 PPCDN 媒体面，构建单机构 1v1 在线教学课堂：双向音视频、屏幕共享、文字聊天、图片/文件、教师端录屏与回放 |
+| 目标 | 基于 PPCDN 媒体面，构建单机构 1v1 在线教学课堂：双向音视频、屏幕共享、文字聊天、图片/文件、教师端本地录屏 |
 | 适用仓库 | `ppClassVip`（Go 后端，独立仓库）、`ppclass-web`（教学前端）、`pplayer`（浏览器推流/播放/录屏 SDK）；媒体面使用 PPCDN/ppmmx，不改造 ppobs |
 | 关联文档 | PPCDN 仓库：`ppcdn-1v1-video-call.zh-CN.md`、`ppcdn-shared-desktop-support.zh-CN.md`、`ppcdn-architecture-design.zh-CN.md`、`streaming.md`、`user-record-api.md` |
-| 更新时间 | 2026-10-30 |
+| 更新时间 | 2026-11-19 |
+
+> 录屏范围更新：录屏在教师浏览器本地完成后直接保存为 WebM 文件，服务端只维护学生同意流程，不存储录像、不提供回放。下文涉及服务端分片存储、finalize 和回放的描述属于早期设计，以本节为准。
 
 ---
 
@@ -16,7 +18,7 @@
 - **MVP 先做 Anchor 中继，不做 P2P。** 一次课堂最多 3 路 publisher（教师摄像头、学生摄像头、共享屏幕）和 3 路 reader，PPCDN 现有 Origin 中继即可承载，ppmmx 无需改媒体代码。教学场景 300–400ms 端到端延迟可接受，先把功能、稳定性和录屏做完整，再考虑 P2P 降成本。
 - **业务层独立成 `ppClassVip` 服务，不塞进 ppcenter。** `ppClassVip` 用自己的 MySQL 8 存教师/课堂/聊天/附件/录屏，自己签发教师 JWT；PPCDN 只作为媒体控制面，提供 Anchor 选点、WHIP/WHEP 凭据和媒体就绪通知。两者通过内部 HTTP API 和配置的 app 凭证对接。
 - **文字聊天和图片/文件不走 WebRTC DataChannel，走“WebSocket + HTTP 上传 + 签名下载”。** 这样可持久化、可审计、可断点续传、离线可看，也不受课堂连接是否还活着影响。
-- **录制采用教师端录屏，不依赖网络侧 split-rec。** 教师在浏览器里用 `getDisplayMedia` + `MediaRecorder` 录制屏幕；音频用 Web Audio 混合“教师麦克风 + 学生远端声音”，不带教师摄像头小窗。录制分片持续上传到课堂存储，结束时落成一个 WebM 文件。这样不需要在服务端分别录多路再合成，也不需要改 ppmmx。
+- **录制采用教师端录屏，不依赖网络侧 split-rec。** 教师在浏览器里用 `getDisplayMedia` + `MediaRecorder` 录制屏幕；音频用 Web Audio 混合“教师麦克风 + 学生远端声音”，不带教师摄像头小窗。录制在教师浏览器本地完成后直接保存为 WebM 文件，服务端只协调学生同意，不存储录像、不提供回放。
 - **录学生声音必须单独征得学生同意。** 录屏开始前学生收到明确提示并确认；拒绝则不能开始录制，课堂中也可要求停止。
 - **单机构部署。** 平台只有一个机构、一个媒体 app；教师由管理员配置，学生以游客邀请链接加入。不做多租户、SaaS 白标和按机构隔离。
 - **首版不包含：** 多人课堂、白板、作业、课程支付、原生 App、E2EE、学生端录屏、教师摄像头小窗。这些放在 P2 以后，避免首版范围失控。
@@ -31,7 +33,7 @@
 - **TEACH-G2**：双方摄像头 + 麦克风双向互通，支持静音、关摄像头、设备切换。
 - **TEACH-G3**：教师可共享整个屏幕/窗口/标签页；同一时刻只允许一方共享，学生共享需教师授权。
 - **TEACH-G4**：课堂内文字聊天，支持图片和文件；消息有序、可重试、可回看。
-- **TEACH-G5**：教师可开启教师端录屏；录屏内容为“屏幕主画面 + 教师麦克风 + 学生远端声音”，不带教师摄像头小窗；课后单文件 WebM 回放/下载。
+- **TEACH-G5**：教师可开启教师端录屏；录屏内容为“屏幕主画面 + 教师麦克风 + 学生远端声音”，不带教师摄像头小窗；录制结束保存为教师本地单文件 WebM。
 - **TEACH-G6**：弱网、断线重连、浏览器权限拒绝、屏幕共享中断等场景有明确降级和提示。
 - **TEACH-G7**：房间、消息、文件、录制都有权限校验、保留期和审计，不把教学数据混进客服消息表。
 
@@ -39,9 +41,9 @@
 
 | 阶段 | 范围 | 目的 |
 | --- | --- | --- |
-| **P0 技术验证** | 两个浏览器经同一 Anchor 互推互拉；屏幕共享独立腿；聊天 WS；文件上传下载；教师端 MediaRecorder 录屏与分片上传 | 验证媒体链路、浏览器兼容性和教师端录屏 |
-| **P1 MVP** | 教师登录、创建课堂、邀请链接、学生游客加入、双人音视频、屏幕共享、文字/图片/文件、在线状态、断线重连、教师端录屏、结束课堂 | 可完整上一节 1v1 课并留下回放 |
-| **P2 教学闭环** | 课程/排课/预约、课堂历史、回放/下载、权限控制、审计、保留期、文件预览、课后资料 | 可给真实教师/学生使用 |
+| **P0 技术验证** | 两个浏览器经同一 Anchor 互推互拉；屏幕共享独立腿；聊天 WS；文件上传下载；教师端 MediaRecorder 本地录屏 | 验证媒体链路、浏览器兼容性和教师端录屏 |
+| **P1 MVP** | 教师登录、创建课堂、邀请链接、学生游客加入、双人音视频、屏幕共享、文字/图片/文件、在线状态、断线重连、教师端录屏、结束课堂 | 可完整上一节 1v1 课并在教师本地保存录屏 |
+| **P2 教学闭环** | 课程/排课/预约、课堂历史、权限控制、审计、保留期、文件预览、课后资料 | 可给真实教师/学生使用 |
 | **P3 增强** | P2P 直连、白板/标注、作业、课程支付、移动端、E2EE、AI 转写 | 降成本、扩场景 |
 | **不做（首版）** | 多人班课、网络侧多路录制再合成、PSTN/SIP、远程控制学生桌面、OBS 推流端接入 | 明确边界 |
 
@@ -89,8 +91,8 @@
   -> 录屏画面为教师屏幕；音频混合教师麦克风 + 学生远端声音
   -> 课堂中：文字/图片/文件、静音、关摄像头、断线重连
   -> 教师结束课堂
-  -> 录屏停止并 finalize，媒体腿释放
-  -> 课后：教师在有效期内回看/下载回放；游客学生默认不回看，除非教师另发链接
+  -> 录屏停止并保存到教师本地，媒体腿释放
+  -> 课后：录屏文件保存在教师本机；游客学生不获得录像，除非教师自行分享文件
 ```
 
 ### 2.3 课堂状态机
@@ -105,7 +107,7 @@ expired                  waiting/ended            failed
 
 - `waiting`：教师已进入，学生未到；教师可以看到“等待学生加入”。
 - `active`：至少双方媒体腿建立；允许一方短暂重连。
-- `ended`：正常结束；保留聊天/文件/回放，房间只读。
+- `ended`：正常结束；保留聊天/文件，房间只读。
 - `failed`：建立失败或异常结束；保留诊断信息，不生成“成功课堂”记录。
 - 房间空闲超过配置时间（建议 30 分钟）自动回收；邀请链接默认 24 小时有效、一次性使用。
 
@@ -246,7 +248,7 @@ expired                  waiting/ended            failed
 
 - 教师在课堂内点击“录屏”，浏览器调用 `getDisplayMedia()` 选择屏幕/窗口；如果已经在共享屏幕，直接复用当前屏幕流。
 - 录制视频源就是教师屏幕，不加摄像头小窗；屏幕 1080p/15fps、1–2 Mbps，`contentHint="text"`。
-- 教师停止共享屏幕时，录屏同步停止并 finalize；UI 提前提示“停止共享将同时停止录屏”。
+- 教师停止共享屏幕时，录屏同步停止并保存到本地；UI 提前提示“停止共享将同时停止录屏”。
 
 **音频：必须同时包含教师麦克风和学生远端声音。**
 
@@ -277,23 +279,20 @@ expired                  waiting/ended            failed
 - 教师点“录屏” → `POST /recordings/start` 创建 `pending_consent` 会话 → WS 给学生发 `recording.request`。
 - 学生点击“同意” → `POST /recordings/:rid/consent` → 服务端通知教师 `recording.consented` → 教师端才启动 `MediaRecorder`。
 - 学生拒绝或 60 秒未确认 → 录制不开始，教师端提示。
-- 学生可在课堂中要求停止录屏；教师端收到后停止并 finalize。
+- 学生可在课堂中要求停止录屏；教师端收到后停止并保存到本地。
 
-**格式与上传：**
+**格式与本地保存：**
 
-- 首版只交付 WebM：`video/webm;codecs=vp9,opus` → `video/webm;codecs=vp8,opus` → `video/webm`。不做 MP4，也不做服务端转封装。
+- 首版只交付 WebM：`video/webm;codecs=vp9,opus` → `video/webm;codecs=vp8,opus` → `video/webm`。不做 MP4。
 - 不支持 WebM `MediaRecorder` 的浏览器（如部分 Safari）禁用教师端录屏，但不影响上课。
-- `MediaRecorder.start(5000)` 每 5 秒产出一个 Blob；前端按顺序上传到 `PUT /v1/classrooms/:id/recordings/:rid/chunks/:seq`。
-- 服务端按 seq 顺序追加到临时文件；重复 seq 幂等忽略，缺 seq 拒绝。
-- 停止录制时调用 `POST /v1/classrooms/:id/recordings/:rid/finalize`，服务端关闭临时文件、校验大小/时长、移动到正式存储、写入 `classroom_recordings`。
-- 上传失败时前端保留未确认分片并重试；重连后先 `GET /recordings/:rid` 查询已收到的最新 seq，再续传。
-- 教师页面刷新/崩溃：已上传分片保留，服务端标记 `interrupted`；能播放的部分保留，不能保证完整。UI 在录制中提示“不要关闭页面”。
+- 录制过程中 `MediaRecorder` 的 Blob 只保存在教师浏览器内存中；停止录制时合并为单个 Blob 并触发本地下载（`<a download>`）。
+- 服务端不接收录像文件，也不保存分片。停止录制后调用 `POST /v1/classrooms/:id/recordings/:rid/stop` 结束会话并清理课堂录屏状态。
+- 教师页面刷新/崩溃会丢失尚未保存的录制；UI 在录制中提示“不要关闭页面”。
 
-**回放：**
+**本地回放：**
 
-- 录制是单文件 WebM，回放页直接 `<video>` 播放，支持倍速、拖动、下载（按权限）。
-- 录制画面只有教师屏幕，音频包含教师和学生；不再需要多文件同步。
-- 课后回放只给教师和机构管理员；游客学生默认没有回放入口，教师可生成单独的回放分享链接（P2）。
+- 录制产物是教师本机的单文件 WebM，可直接用浏览器或播放器打开，支持倍速、拖动。
+- 录制画面只有教师屏幕，音频包含教师和学生；服务端不提供回放页或下载链接。
 - 录制开关、录制中状态、学生确认状态都要在 UI 明确展示；录屏开始前必须完成学生确认（合规要求见 §8）。
 
 ### 4.6 P2P 演进（P3）
@@ -466,11 +465,7 @@ expired                  waiting/ended            failed
 | `id` / `room_id` / `lesson_id` | 课堂/课程 |
 | `recording_id` | 对外录制会话 ID |
 | `uploader_id` | 教师 participant |
-| `format/content_type` | 固定 `webm` / `video/webm` |
-| `file_key` | 正式存储 key，finalize 后写入 |
-| `duration_seconds/size_bytes` | 元数据 |
-| `last_chunk_seq` | 已接收的最后一个分片序号，用于续传 |
-| `includes_student_audio` | 固定 true；用于审计和回放提示 |
+| `includes_student_audio` | 固定 true；用于审计和录制提示 |
 | `consent_at` | 学生确认录制的时间 |
 | `consent_by` | 确认录制的学生 participant |
 | `started_at/ended_at` | 教室内时间 |
@@ -504,11 +499,8 @@ POST   /v1/classrooms/:id/screen/stop
 POST   /v1/classrooms/:id/recordings/start       # 教师发起录屏，进入 pending_consent
 POST   /v1/classrooms/:id/recordings/:rid/consent # 学生确认录制
 POST   /v1/classrooms/:id/recordings/:rid/decline # 学生拒绝录制
-GET    /v1/classrooms/:id/recordings/:rid        # 查询 lastChunkSeq / 同意状态，用于续传
-PUT    /v1/classrooms/:id/recordings/:rid/chunks/:seq
-POST   /v1/classrooms/:id/recordings/:rid/finalize
-POST   /v1/classrooms/:id/recordings/:rid/abort
-GET    /v1/classrooms/:id/recordings             # 课堂录制列表
+GET    /v1/classrooms/:id/recordings/:rid        # 查询录制会话状态
+POST   /v1/classrooms/:id/recordings/:rid/stop   # 结束录制会话（文件保存在教师本地）
 GET    /v1/classrooms/:id/messages
 POST   /v1/classrooms/:id/messages
 POST   /v1/classrooms/:id/attachments
@@ -543,12 +535,11 @@ GET    /api/v1/classrooms/:id/ws          # 课堂 WS，room token 走子协议
 ```
 
 - `screen/start` 返回屏幕腿的 `publish` 凭据，并通过 WS 通知对端 `peer.publishing {leg:"teacher-screen"}`。
-- `recordings/start` 只允许教师；服务端校验学生已加入，客户端必须确认已拿到学生远端音频轨，拿不到则不发起 / 返回 `student_audio_unavailable`。返回 `recordingId`、`chunkSize`、`maxChunkBytes`、`expiresAt`，状态为 `pending_consent`。
+- `recordings/start` 只允许教师；服务端校验学生已加入，客户端必须确认已拿到学生远端音频轨，拿不到则不发起 / 返回 `student_audio_unavailable`。返回 `recordingId`、`consentExpiresAt`，状态为 `pending_consent`。
 - 学生调用 `recordings/:rid/consent` 后，服务端通过 WS 通知教师 `recording.consented`；教师端才启动 `MediaRecorder`。学生调用 `decline` 或 60 秒未确认则状态 `declined`。
-- 服务端只接收分片和落盘，不发起网络侧录制；`includes_student_audio` 固定为 true。
-- 分片上传使用原始 `application/octet-stream`，`seq` 从 0 连续递增；服务端按 seq 追加，重复 seq 幂等，缺 seq 返回 `chunk_out_of_order`。
-- `finalize` 校验分片连续、总大小、Content-Type，生成单文件并写 `classroom_recordings`；失败返回 `recording_incomplete`。
-- 错误码建议：`invalid_request`、`room_not_found`、`room_forbidden`、`room_ended`、`invite_expired`、`invite_used`、`room_full`、`screen_busy`、`screen_forbidden`、`recording_forbidden`、`recording_declined`、`student_audio_unavailable`、`recording_incomplete`、`chunk_out_of_order`、`attachment_too_large`、`attachment_type_forbidden`、`no_anchor_available`、`account_in_arrears`。
+- 服务端不接收录像文件、不落盘录像；录制在教师浏览器本地完成并在停止时直接下载保存。
+- 停止录制后教师调用 `recordings/:rid/stop`，服务端结束会话、清理课堂录屏状态并广播 `recording.state`。
+- 错误码建议：`invalid_request`、`room_not_found`、`room_forbidden`、`room_ended`、`invite_expired`、`invite_used`、`room_full`、`screen_busy`、`screen_forbidden`、`recording_forbidden`、`recording_disabled`、`recording_declined`、`student_audio_unavailable`、`attachment_too_large`、`attachment_type_forbidden`、`no_anchor_available`、`account_in_arrears`。
 
 ### 6.3 WebSocket 协议
 
@@ -872,7 +863,7 @@ SLO 建议：
 - `internal/model/classroom.go`：房间/参与者/邀请/消息/附件/录屏/审计/媒体统计模型。
 - `internal/store/classroom_store.go`、`attachment_store.go`、`recording_store.go`、`audit_store.go`、`media_stat_store.go`。
 - `internal/api/classroom*.go`：课堂 REST、WS、附件、录屏、屏幕、控制、审计。
-- `internal/reaper/classroom_reaper.go`：过期房间/待确认录屏/中断录屏/附件/录屏清理。
+- `internal/reaper/classroom_reaper.go`：过期房间/待确认录屏/中断录屏/附件清理。
 - `internal/ppcdn/client.go`：调用 ppcenter publish/play 签发 WHIP/WHEP 凭据。
 - `internal/storage/local.go`：本地附件与录屏分片存储。
 
@@ -899,6 +890,6 @@ SLO 建议：
 
 - 服务：`ppclassvip` Go 二进制 + systemd；MySQL 8 独立库 `ppclassvip`。
 - nginx：课堂站点、`client_max_body_size 64m`、WS 升级、上传超时。
-- 存储：`/opt/ppclassvip/data/classroom-files`（附件）与 `/opt/ppclassvip/data/classroom-recordings`（录屏分片/成品），或对象存储桶 + 生命周期。
+- 存储：`/opt/ppclassvip/data/classroom-files`（附件），或对象存储桶 + 生命周期；录屏文件保存在教师本机，服务端不存储。
 - 配置：`PPCLASS_MYSQL_DSN`、`PPCLASS_JWT_SECRET`、`PPCLASS_HTTP_ADDR`、`ppcdn.baseUrl/appId/appSecret`、`classroom.maxFileBytes`、`classroom.retentionDays`。
 - 监控：课堂创建/加入失败/首帧/屏幕共享/上传/录屏指标与告警。

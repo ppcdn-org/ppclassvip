@@ -79,7 +79,6 @@ func (r *ClassroomReaper) tick(ctx context.Context) {
 	r.expireConsent(ctx)
 	r.markInterrupted(ctx)
 	r.purgeAttachments(ctx)
-	r.purgeRecordings(ctx)
 	r.purgeMediaStats(ctx)
 	r.expireRemoteDesktop(ctx)
 }
@@ -260,28 +259,5 @@ func (r *ClassroomReaper) purgeMediaStats(ctx context.Context) {
 	}
 	if _, err := r.mediaStats.DeleteOlderThan(ctx, time.Now().Add(-30*24*time.Hour)); err != nil {
 		r.log.Warn("purge media stats failed", "error", err)
-	}
-}
-
-func (r *ClassroomReaper) purgeRecordings(ctx context.Context) {
-	if r.recordings == nil || r.storage == nil {
-		return
-	}
-	recordings, err := r.recordings.ListExpired(ctx, time.Now().Add(-r.classroomConfig().RecordingRetention.Std()), 100)
-	if err != nil {
-		r.log.Warn("list expired recordings failed", "error", err)
-		return
-	}
-	for _, recording := range recordings {
-		if err := r.storage.DeleteRecording(recording.RoomID, recording.RecordingID, recording.FileKey); err != nil {
-			r.log.Warn("delete recording file failed", "error", err, "recording_id", recording.ID)
-			continue
-		}
-		if err := r.recordings.Update(ctx, recording.ID, map[string]any{
-			"status":   model.RecordingStatePurged,
-			"file_key": "",
-		}); err != nil {
-			r.log.Warn("mark recording purged failed", "error", err, "recording_id", recording.ID)
-		}
 	}
 }

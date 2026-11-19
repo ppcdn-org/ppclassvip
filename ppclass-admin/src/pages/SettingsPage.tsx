@@ -69,16 +69,6 @@ export default function SettingsPage() {
             value={settings.roomQuotaBytes / MB}
             onChange={(value) => setSettings({ ...settings, roomQuotaBytes: Math.round(value * MB) })}
           />
-          <NumberField
-            label="单个录屏分片上限 (MB)"
-            value={settings.maxChunkBytes / MB}
-            onChange={(value) => setSettings({ ...settings, maxChunkBytes: Math.round(value * MB) })}
-          />
-          <NumberField
-            label="单次录屏上限 (MB)"
-            value={settings.maxRecordingBytes / MB}
-            onChange={(value) => setSettings({ ...settings, maxRecordingBytes: Math.round(value * MB) })}
-          />
           <div>
             <label>录屏开关</label>
             <label className="checkbox">
@@ -87,7 +77,7 @@ export default function SettingsPage() {
                 checked={settings.recordingEnabled}
                 onChange={(event) => setSettings({ ...settings, recordingEnabled: event.target.checked })}
               />
-              允许教师发起录屏
+              允许教师发起录屏（录屏保存在教师本机）
             </label>
           </div>
         </div>
@@ -108,11 +98,6 @@ export default function SettingsPage() {
             label="附件保留期 (天)"
             value={settings.attachmentRetentionDays}
             onChange={(value) => setSettings({ ...settings, attachmentRetentionDays: Math.round(value) })}
-          />
-          <NumberField
-            label="录屏保留期 (天)"
-            value={settings.recordingRetentionDays}
-            onChange={(value) => setSettings({ ...settings, recordingRetentionDays: Math.round(value) })}
           />
           <NumberField
             label="每教师并发课堂上限"

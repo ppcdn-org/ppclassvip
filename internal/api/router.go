@@ -115,7 +115,6 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	v1.GET("/classrooms/:id/ws", classroomHandler.ConnectWS)
 	v1.GET("/classrooms/:id/remote-desktop/:sid/control", classroomHandler.RemoteControlWS)
 	v1.GET("/classrooms/:id/attachments/:aid/download", classroomHandler.DownloadAttachment)
-	v1.GET("/classrooms/:id/recordings/:rid/download", classroomHandler.DownloadRecording)
 
 	protected := v1.Group("")
 	protected.Use(middleware.AuthRequired(deps.Tokens))
@@ -148,13 +147,10 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	protected.GET("/classrooms/:id/attachments/:aid", classroomHandler.GetAttachment)
 
 	protected.POST("/classrooms/:id/recordings/start", classroomHandler.StartRecording)
-	protected.GET("/classrooms/:id/recordings", classroomHandler.ListRecordings)
 	protected.GET("/classrooms/:id/recordings/:rid", classroomHandler.GetRecording)
 	protected.POST("/classrooms/:id/recordings/:rid/consent", classroomHandler.ConsentRecording)
 	protected.POST("/classrooms/:id/recordings/:rid/decline", classroomHandler.DeclineRecording)
-	protected.PUT("/classrooms/:id/recordings/:rid/chunks/:seq", classroomHandler.UploadRecordingChunk)
-	protected.POST("/classrooms/:id/recordings/:rid/finalize", classroomHandler.FinalizeRecording)
-	protected.POST("/classrooms/:id/recordings/:rid/abort", classroomHandler.AbortRecording)
+	protected.POST("/classrooms/:id/recordings/:rid/stop", classroomHandler.StopRecording)
 
 	admin := protected.Group("/admin")
 	admin.Use(middleware.AdminRequired())
@@ -165,8 +161,6 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	admin.GET("/classrooms", adminHandler.ListClassrooms)
 	admin.GET("/classrooms/:id", adminHandler.GetClassroom)
 	admin.POST("/classrooms/:id/end", adminHandler.EndClassroom)
-	admin.GET("/recordings", adminHandler.ListRecordings)
-	admin.DELETE("/recordings/:id", adminHandler.DeleteRecording)
 	admin.GET("/attachments", adminHandler.ListAttachments)
 	admin.DELETE("/attachments/:id", adminHandler.DeleteAttachment)
 	admin.GET("/audit", adminHandler.ListAudit)

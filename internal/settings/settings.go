@@ -27,13 +27,10 @@ func defaults(cfg config.ClassroomConfig) model.PlatformSetting {
 		MaxFileBytes:            cfg.MaxFileBytes,
 		MaxImageBytes:           cfg.MaxImageBytes,
 		RoomQuotaBytes:          cfg.RoomQuotaBytes,
-		MaxChunkBytes:           cfg.MaxChunkBytes,
-		MaxRecordingBytes:       cfg.MaxRecordingBytes,
 		RecordingEnabled:        true,
 		ConsentTTLSeconds:       int(cfg.ConsentTTL.Std() / time.Second),
 		IdleTTLSeconds:          int(cfg.IdleTTL.Std() / time.Second),
 		AttachmentRetentionDays: int(cfg.AttachmentRetention.Std() / (24 * time.Hour)),
-		RecordingRetentionDays:  int(cfg.RecordingRetention.Std() / (24 * time.Hour)),
 		MessageRatePerMinute:    cfg.MessageRatePerMinute,
 		UploadRatePerMinute:     cfg.UploadRatePerMinute,
 		InviteRatePerMinute:     cfg.InviteRatePerMinute,
@@ -80,10 +77,7 @@ func (s *Service) Classroom() config.ClassroomConfig {
 		MaxFileBytes:         v.MaxFileBytes,
 		MaxImageBytes:        v.MaxImageBytes,
 		RoomQuotaBytes:       v.RoomQuotaBytes,
-		MaxChunkBytes:        v.MaxChunkBytes,
-		MaxRecordingBytes:    v.MaxRecordingBytes,
 		AttachmentRetention:  config.Duration(time.Duration(v.AttachmentRetentionDays) * 24 * time.Hour),
-		RecordingRetention:   config.Duration(time.Duration(v.RecordingRetentionDays) * 24 * time.Hour),
 		MessageRatePerMinute: v.MessageRatePerMinute,
 		UploadRatePerMinute:  v.UploadRatePerMinute,
 		InviteRatePerMinute:  v.InviteRatePerMinute,
@@ -120,14 +114,11 @@ func (s *Service) Update(ctx context.Context, input model.PlatformSetting, userI
 }
 
 func validate(v model.PlatformSetting) error {
-	if v.MaxFileBytes <= 0 || v.MaxImageBytes <= 0 || v.MaxChunkBytes <= 0 || v.MaxRecordingBytes <= 0 {
+	if v.MaxFileBytes <= 0 || v.MaxImageBytes <= 0 {
 		return fmt.Errorf("%w: size limits must be positive", ErrInvalidSetting)
 	}
 	if v.RoomQuotaBytes < v.MaxFileBytes {
 		return fmt.Errorf("%w: room quota must be at least max file size", ErrInvalidSetting)
-	}
-	if v.MaxRecordingBytes < v.MaxChunkBytes {
-		return fmt.Errorf("%w: max recording size must be at least max chunk size", ErrInvalidSetting)
 	}
 	if v.ConsentTTLSeconds < 10 || v.ConsentTTLSeconds > 600 {
 		return fmt.Errorf("%w: consent TTL must be between 10 and 600 seconds", ErrInvalidSetting)
@@ -135,7 +126,7 @@ func validate(v model.PlatformSetting) error {
 	if v.IdleTTLSeconds < 60 {
 		return fmt.Errorf("%w: idle TTL must be at least 60 seconds", ErrInvalidSetting)
 	}
-	if v.AttachmentRetentionDays < 1 || v.RecordingRetentionDays < 1 {
+	if v.AttachmentRetentionDays < 1 {
 		return fmt.Errorf("%w: retention must be at least 1 day", ErrInvalidSetting)
 	}
 	if v.MessageRatePerMinute < 1 || v.UploadRatePerMinute < 1 || v.InviteRatePerMinute < 1 {
@@ -159,12 +150,6 @@ func normalize(v model.PlatformSetting, cfg config.ClassroomConfig) model.Platfo
 	if v.RoomQuotaBytes <= 0 {
 		v.RoomQuotaBytes = d.RoomQuotaBytes
 	}
-	if v.MaxChunkBytes <= 0 {
-		v.MaxChunkBytes = d.MaxChunkBytes
-	}
-	if v.MaxRecordingBytes <= 0 {
-		v.MaxRecordingBytes = d.MaxRecordingBytes
-	}
 	if v.ConsentTTLSeconds <= 0 {
 		v.ConsentTTLSeconds = d.ConsentTTLSeconds
 	}
@@ -173,9 +158,6 @@ func normalize(v model.PlatformSetting, cfg config.ClassroomConfig) model.Platfo
 	}
 	if v.AttachmentRetentionDays <= 0 {
 		v.AttachmentRetentionDays = d.AttachmentRetentionDays
-	}
-	if v.RecordingRetentionDays <= 0 {
-		v.RecordingRetentionDays = d.RecordingRetentionDays
 	}
 	if v.MessageRatePerMinute <= 0 {
 		v.MessageRatePerMinute = d.MessageRatePerMinute

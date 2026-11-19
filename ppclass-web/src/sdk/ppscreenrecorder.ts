@@ -1,11 +1,9 @@
 export type RecorderState = 'idle' | 'recording' | 'stopped' | 'error';
 
 interface Options {
-  uploadChunk: (seq: number, chunk: Blob) => Promise<unknown>;
   onState?: (state: RecorderState, detail?: string) => void;
   onError?: (error: Error) => void;
   chunkIntervalMs?: number;
-  retries?: number;
 }
 
 interface StartInput {
@@ -23,12 +21,15 @@ function pickMimeType() {
   return candidates.find((type) => MediaRecorder.isTypeSupported(type)) || null;
 }
 
+// ScreenRecorder captures the screen plus mixed audio in the browser. The
+// resulting WebM stays on the teacher's machine: stop() returns a Blob that the
+// caller saves as a local file, and nothing is uploaded to the server.
 export class ScreenRecorder {
   private recorder: MediaRecorder | null = null;
   private audioContext: AudioContext | null = null;
   private destination: MediaStreamAudioDestinationNode | null = null;
-  private uploadChain: Promise<void> = Promise.resolve();
-  private nextSeq = 0;
+  private chunks: Blob[] = [];
+  private mimeType = 'video/webm';
   private lastError: Error | null = null;
   private state: RecorderState = 'idle';
 
@@ -36,10 +37,6 @@ export class ScreenRecorder {
 
   get currentState() {
     return this.state;
-  }
-
-  get nextChunkSeq() {
-    return this.nextSeq;
   }
 
   async start(input: StartInput) {
@@ -63,15 +60,16 @@ export class ScreenRecorder {
 
     this.audioContext = audioContext;
     this.destination = destination;
+    this.mimeType = mimeType;
+    this.chunks = [];
     const mixed = new MediaStream([videoTrack, ...destination.stream.getAudioTracks()]);
     const recorder = new MediaRecorder(mixed, { mimeType });
     this.recorder = recorder;
-    this.nextSeq = 0;
     this.lastError = null;
     this.setState('recording');
 
     recorder.ondataavailable = (event) => {
-      if (event.data.size > 0) this.enqueue(event.data);
+      if (event.data.size > 0) this.chunks.push(event.data);
     };
     recorder.onerror = (event) => {
       const error = new Error(`MediaRecorder error: ${String(event)}`);
@@ -84,21 +82,20 @@ export class ScreenRecorder {
 
   async stop() {
     const recorder = this.recorder;
-    if (!recorder) return;
+    if (!recorder) {
+      return new Blob(this.chunks, { type: this.mimeType });
+    }
     await new Promise<void>((resolve) => {
       recorder.onstop = () => resolve();
       recorder.stop();
     });
     this.recorder = null;
     this.setState('stopped');
-
-    try {
-      await this.uploadChain;
-    } catch {
-      // The chunk upload already reported the error through onError.
-    }
     this.cleanup();
+    const blob = new Blob(this.chunks, { type: this.mimeType });
+    this.chunks = [];
     if (this.lastError) throw this.lastError;
+    return blob;
   }
 
   abort() {
@@ -108,39 +105,9 @@ export class ScreenRecorder {
       // ignore
     }
     this.recorder = null;
+    this.chunks = [];
     this.cleanup();
     this.setState('stopped');
-  }
-
-  private enqueue(chunk: Blob) {
-    const seq = this.nextSeq++;
-    this.uploadChain = this.uploadChain.then(async () => {
-      if (this.lastError) return;
-      await this.uploadWithRetry(seq, chunk);
-    });
-    this.uploadChain = this.uploadChain.catch((error: unknown) => {
-      const err = error instanceof Error ? error : new Error(String(error));
-      this.lastError = err;
-      this.setState('error', err.message);
-      this.options.onError?.(err);
-      throw err;
-    });
-  }
-
-  private async uploadWithRetry(seq: number, chunk: Blob) {
-    const retries = this.options.retries ?? 4;
-    let lastError: unknown;
-    for (let attempt = 0; attempt <= retries; attempt += 1) {
-      try {
-        await this.options.uploadChunk(seq, chunk);
-        return;
-      } catch (error) {
-        lastError = error;
-        if (attempt === retries) break;
-        await new Promise((resolve) => window.setTimeout(resolve, 500 * 2 ** attempt));
-      }
-    }
-    throw lastError instanceof Error ? lastError : new Error('录屏分片上传失败');
   }
 
   private setState(state: RecorderState, detail?: string) {

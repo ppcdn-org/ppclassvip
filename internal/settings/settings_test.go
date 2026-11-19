@@ -17,12 +17,9 @@ func TestUpdateAppliesRuntimeValues(t *testing.T) {
 	input.MaxFileBytes = 12 << 20
 	input.MaxImageBytes = 4 << 20
 	input.RoomQuotaBytes = 100 << 20
-	input.MaxChunkBytes = 2 << 20
-	input.MaxRecordingBytes = 50 << 20
 	input.ConsentTTLSeconds = 30
 	input.IdleTTLSeconds = 120
 	input.AttachmentRetentionDays = 30
-	input.RecordingRetentionDays = 10
 	input.MessageRatePerMinute = 50
 	input.UploadRatePerMinute = 10
 	input.InviteRatePerMinute = 10

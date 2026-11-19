@@ -8,7 +8,6 @@ const links = [
   { to: '/', label: '概览', end: true },
   { to: '/users', label: '用户' },
   { to: '/classrooms', label: '课堂' },
-  { to: '/recordings', label: '录屏' },
   { to: '/attachments', label: '附件' },
   { to: '/audit', label: '审计' },
   { to: '/settings', label: '系统设置' },

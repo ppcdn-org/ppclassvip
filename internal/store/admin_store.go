@@ -24,9 +24,7 @@ type AdminStats struct {
 	Rooms           int64 `json:"rooms"`
 	OpenRooms       int64 `json:"openRooms"`
 	EndedRooms      int64 `json:"endedRooms"`
-	Recordings      int64 `json:"recordings"`
 	Attachments     int64 `json:"attachments"`
-	RecordingBytes  int64 `json:"recordingBytes"`
 	AttachmentBytes int64 `json:"attachmentBytes"`
 }
 
@@ -53,15 +51,7 @@ func (s *AdminStore) Stats(ctx context.Context) (AdminStats, error) {
 	if err := db.Model(&model.Classroom{}).Where("state = ?", model.ClassroomStateEnded).Count(&stats.EndedRooms).Error; err != nil {
 		return stats, err
 	}
-	if err := db.Model(&model.ClassroomRecording{}).Count(&stats.Recordings).Error; err != nil {
-		return stats, err
-	}
 	if err := db.Model(&model.ClassroomAttachment{}).Count(&stats.Attachments).Error; err != nil {
-		return stats, err
-	}
-	if err := db.Model(&model.ClassroomRecording{}).
-		Where("status = ?", model.RecordingStateCompleted).
-		Select("COALESCE(SUM(size_bytes), 0)").Scan(&stats.RecordingBytes).Error; err != nil {
 		return stats, err
 	}
 	if err := db.Model(&model.ClassroomAttachment{}).
@@ -124,24 +114,6 @@ func (s *AdminStore) ListRooms(ctx context.Context, query, state string, teacher
 	var rooms []model.Classroom
 	err := db.Order("id DESC").Limit(limit).Offset(offset).Find(&rooms).Error
 	return rooms, total, err
-}
-
-func (s *AdminStore) ListRecordings(ctx context.Context, roomID uint64, status string, limit, offset int) ([]model.ClassroomRecording, int64, error) {
-	limit, offset = pagination(limit, offset)
-	db := s.db.WithContext(ctx).Model(&model.ClassroomRecording{})
-	if roomID != 0 {
-		db = db.Where("room_id = ?", roomID)
-	}
-	if status != "" {
-		db = db.Where("status = ?", status)
-	}
-	var total int64
-	if err := db.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-	var recordings []model.ClassroomRecording
-	err := db.Order("id DESC").Limit(limit).Offset(offset).Find(&recordings).Error
-	return recordings, total, err
 }
 
 func (s *AdminStore) ListAttachments(ctx context.Context, roomID uint64, status string, limit, offset int) ([]model.ClassroomAttachment, int64, error) {

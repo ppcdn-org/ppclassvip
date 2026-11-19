@@ -1,6 +1,6 @@
 # PPClassVip
 
-单机构 1v1 在线教学系统。媒体面复用 PPCDN（WHIP/WHEP + Anchor 中继），业务面是独立的 Go 服务，负责教师/游客、课堂、聊天、文件、教师端录屏与回放。
+单机构 1v1 在线教学系统，基于PPCDN（www.pp-cdn.org）实现。业务面是独立的 Go 服务，负责教师/游客、课堂、聊天、文件、教师端本地录屏。
 
 当前版本已包含基础框架和后端 P1 课堂闭环：
 
@@ -15,11 +15,11 @@
 - 课堂 WebSocket：presence、聊天、输入状态、已读、屏幕共享、录屏确认、媒体状态
 - 附件上传/下载：类型与魔数白名单、大小/课堂配额、签名鉴权、Range 下载
 - 屏幕共享凭据与占用控制、教师控制（静音、允许学生共享、关闭聊天）
-- 教师端录屏：学生同意、分片接收/续传、finalize、回放下载
+- 教师端录屏：学生同意后在教师浏览器本地录制并保存为 WebM 文件，服务端不存储、不提供回放
 - PPCDN 媒体凭据：封装 `internal/ppcdn`，调用 ppcenter 的 publish/play 签发接口
-- 限流、审计日志、日志脱敏、过期房间/邀请/录屏/附件清理 reaper
+- 限流、审计日志、日志脱敏、过期房间/邀请/附件清理 reaper
 - Windows 远程桌面 Agent：学生授权、只读/控制、断线重连与自动更新
-- 独立管理后台：用户、课堂、录屏、附件、审计与系统设置
+- 独立管理后台：用户、课堂、附件、审计与系统设置
 - 种子用户命令、MySQL 8 本地 compose
 
 ## 目录
@@ -40,9 +40,9 @@ internal/
   model/             GORM 模型
   ppcdn/             ppcenter 媒体凭据客户端
   realtime/          WebSocket Hub 与远程控制通道
-  reaper/            过期课堂/录屏/附件清理
+  reaper/            过期课堂/邀请/附件清理
   settings/          课堂配额与限流动态配置
-  storage/           本地附件与录屏分片存储
+  storage/           本地附件存储
   store/             数据访问
   version/           构建版本
 configs/config.yaml  本地开发配置
@@ -204,12 +204,8 @@ curl http://localhost:18080/api/v1/auth/me \
 | POST | `/api/v1/classrooms/:id/recordings/start` | 教师发起录屏，进入待学生确认 |
 | POST | `/api/v1/classrooms/:id/recordings/:rid/consent` | 学生同意录屏 |
 | POST | `/api/v1/classrooms/:id/recordings/:rid/decline` | 学生拒绝录屏 |
-| GET | `/api/v1/classrooms/:id/recordings/:rid` | 查询录屏状态与 `lastChunkSeq` |
-| PUT | `/api/v1/classrooms/:id/recordings/:rid/chunks/:seq` | 上传录屏分片 |
-| POST | `/api/v1/classrooms/:id/recordings/:rid/finalize` | 完成录屏 |
-| POST | `/api/v1/classrooms/:id/recordings/:rid/abort` | 中止录屏 |
-| GET | `/api/v1/classrooms/:id/recordings` | 课堂录屏列表 |
-| GET | `/api/v1/classrooms/:id/recordings/:rid/download` | 教师下载/回放录屏，`?token=` 传 room token |
+| GET | `/api/v1/classrooms/:id/recordings/:rid` | 查询录屏会话状态 |
+| POST | `/api/v1/classrooms/:id/recordings/:rid/stop` | 停止录屏会话（文件已在教师本地保存） |
 
 ### 管理后台 API
 
@@ -224,8 +220,6 @@ curl http://localhost:18080/api/v1/auth/me \
 | GET | `/api/v1/admin/classrooms` | 课堂列表 |
 | GET | `/api/v1/admin/classrooms/:id` | 课堂详情 |
 | POST | `/api/v1/admin/classrooms/:id/end` | 管理员结束课堂 |
-| GET | `/api/v1/admin/recordings` | 录屏列表 |
-| DELETE | `/api/v1/admin/recordings/:id` | 删除录屏 |
 | GET | `/api/v1/admin/attachments` | 附件列表 |
 | DELETE | `/api/v1/admin/attachments/:id` | 删除附件 |
 | GET | `/api/v1/admin/audit` | 全局审计日志 |
@@ -337,16 +331,12 @@ const ws = new WebSocket(
 | `PPCLASS_CLASSROOM_MAX_FILE_BYTES` | 单个附件上限，默认 50 MB |
 | `PPCLASS_CLASSROOM_MAX_IMAGE_BYTES` | 单张图片上限，默认 10 MB |
 | `PPCLASS_CLASSROOM_ROOM_QUOTA_BYTES` | 单课堂附件总量，默认 500 MB |
-| `PPCLASS_CLASSROOM_MAX_CHUNK_BYTES` | 单个录屏分片上限，默认 8 MB |
-| `PPCLASS_CLASSROOM_MAX_RECORDING_BYTES` | 单次录屏上限，默认 4 GB |
 | `PPCLASS_CLASSROOM_ATTACHMENT_RETENTION` | 附件保留期，默认 365 天 |
-| `PPCLASS_CLASSROOM_RECORDING_RETENTION` | 录屏保留期，默认 90 天 |
 | `PPCLASS_CLASSROOM_MESSAGE_RATE_PER_MINUTE` | 每人每分钟消息数 |
 | `PPCLASS_CLASSROOM_UPLOAD_RATE_PER_MINUTE` | 每人每分钟上传数 |
 | `PPCLASS_CLASSROOM_INVITE_RATE_PER_MINUTE` | 每 IP 每分钟邀请/游客加入数 |
 | `PPCLASS_STORAGE_DATA_DIR` | 本地存储根目录，默认 `./data` |
 | `PPCLASS_STORAGE_ATTACHMENT_DIR` | 附件目录，默认 `{dataDir}/attachments` |
-| `PPCLASS_STORAGE_RECORDING_DIR` | 录屏目录，默认 `{dataDir}/recordings` |
 | `PPCLASS_PPCDN_ENABLED` | 是否启用 PPCDN 媒体凭据 |
 | `PPCLASS_PPCDN_BASE_URL` | ppcenter 地址，如 `https://api.pp-cdn.org` |
 | `PPCLASS_PPCDN_APP_ID` | 单机构课堂媒体 appId |
@@ -365,7 +355,7 @@ go build -trimpath -ldflags "-s -w -X ppclassvip/internal/version.Version=0.1.0"
 
 ## P1 后端范围
 
-当前仓库已完成 P1：课堂生命周期、聊天、附件、屏幕共享凭据、录制分片与确认、PPCDN 媒体凭据、限流、审计和清理，以及前端 `ppclass-web`（React 19 + TypeScript + Vite）。
+当前仓库已完成 P1：课堂生命周期、聊天、附件、屏幕共享凭据、录屏同意与本地录制、PPCDN 媒体凭据、限流、审计和清理，以及前端 `ppclass-web`（React 19 + TypeScript + Vite）。
 
 前端代码在 [`ppclass-web/`](ppclass-web/)，包含教师工作台、学生邀请页、课堂页、`ppclass` SDK 和 `ppscreenrecorder` 录屏模块：
 
@@ -378,7 +368,7 @@ npm run dev
 
 `ppclass-web` 默认把 `/api` 代理到 `http://127.0.0.1:18080`，并复用 `pplayer` 的 `ppwebpublish.mjs` / `ppplayer.mjs`（通过 `sync:pplayer` 拷贝，不修改外部仓库）。详见 [ppclass-web/README.md](ppclass-web/README.md)。
 
-独立管理后台在 [`ppclass-admin/`](ppclass-admin/)，仅 `admin` 角色可登录，部署在 `/admin/`：包含运营概览、用户管理、课堂详情/结束、录屏/附件管理、全局审计和系统设置（配额、限流、保留期、录屏开关、每教师课堂上限），设置保存后立即生效。详见 [ppclass-admin/README.md](ppclass-admin/README.md)。
+独立管理后台在 [`ppclass-admin/`](ppclass-admin/)，仅 `admin` 角色可登录，部署在 `/admin/`：包含运营概览、用户管理、课堂详情/结束、附件管理、全局审计和系统设置（配额、限流、保留期、录屏开关、每教师课堂上限），设置保存后立即生效。详见 [ppclass-admin/README.md](ppclass-admin/README.md)。
 
 ```powershell
 cd ppclass-admin
@@ -393,13 +383,3 @@ Agent 安装包：`https://ppclassvip.pp-cdn.org/downloads/ppclass-agent-setup.e
 自动化已验证项与需要人工验收的清单见 [docs/p1-acceptance-status.zh-CN.md](docs/p1-acceptance-status.zh-CN.md)。
 
 当前整体开发进度见 [docs/development-progress.zh-CN.md](docs/development-progress.zh-CN.md)。
-
-## 下一步（P2 剩余）
-
-1. 课程/排课/预约（`lessons`）与课堂历史。
-2. 回放页、回放分享链接、下载权限与保留期管理界面。
-3. 文件预览、课后资料、聊天导出。
-4. 管理端监控指标与告警（审计与配额配置已由 `ppclass-admin` 提供）。
-5. 兼容性、弱网和安全测试。
-
-详细设计见 [docs/roadmap/ppclassvip-1v1-video-teaching.zh-CN.md](docs/roadmap/ppclassvip-1v1-video-teaching.zh-CN.md)。

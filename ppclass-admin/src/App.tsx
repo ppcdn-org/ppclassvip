@@ -5,7 +5,6 @@ import AuditPage from './pages/AuditPage';
 import ClassroomsPage from './pages/ClassroomsPage';
 import DashboardPage from './pages/DashboardPage';
 import LoginPage from './pages/LoginPage';
-import RecordingsPage from './pages/RecordingsPage';
 import SettingsPage from './pages/SettingsPage';
 import UsersPage from './pages/UsersPage';
 
@@ -17,7 +16,6 @@ export default function App() {
         <Route index element={<DashboardPage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="classrooms" element={<ClassroomsPage />} />
-        <Route path="recordings" element={<RecordingsPage />} />
         <Route path="attachments" element={<AttachmentsPage />} />
         <Route path="audit" element={<AuditPage />} />
         <Route path="settings" element={<SettingsPage />} />

@@ -46,20 +46,6 @@ export interface Participant {
   leftAt?: string;
 }
 
-export interface Recording {
-  id: number;
-  roomId: number;
-  recordingId: string;
-  status: string;
-  format: string;
-  sizeBytes: number;
-  lastChunkSeq: number;
-  includesStudentAudio: boolean;
-  startedAt: string;
-  endedAt?: string;
-  error?: string;
-}
-
 export interface Attachment {
   id: number;
   roomId: number;
@@ -90,9 +76,7 @@ export interface Stats {
   rooms: number;
   openRooms: number;
   endedRooms: number;
-  recordings: number;
   attachments: number;
-  recordingBytes: number;
   attachmentBytes: number;
 }
 
@@ -100,13 +84,10 @@ export interface Settings {
   maxFileBytes: number;
   maxImageBytes: number;
   roomQuotaBytes: number;
-  maxChunkBytes: number;
-  maxRecordingBytes: number;
   recordingEnabled: boolean;
   consentTtlSeconds: number;
   idleTtlSeconds: number;
   attachmentRetentionDays: number;
-  recordingRetentionDays: number;
   messageRatePerMinute: number;
   uploadRatePerMinute: number;
   inviteRatePerMinute: number;
@@ -207,7 +188,6 @@ export class AdminApi {
       room: Classroom;
       teacher?: { id: number; email: string; nickname: string; role: string };
       participants: Participant[];
-      recordings: Recording[];
       attachments: Attachment[];
       audit: AuditEntry[];
     }>('GET', `/admin/classrooms/${id}`);
@@ -215,17 +195,6 @@ export class AdminApi {
 
   endClassroom(id: number) {
     return this.request<{ room: Classroom }>('POST', `/admin/classrooms/${id}/end`, {});
-  }
-
-  listRecordings(params: { roomId?: number; status?: string; limit?: number; offset?: number }) {
-    return this.request<{ recordings: Recording[]; total: number; limit: number; offset: number }>(
-      'GET',
-      `/admin/recordings${queryString(params)}`,
-    );
-  }
-
-  deleteRecording(id: number) {
-    return this.request<{ deleted: boolean }>('DELETE', `/admin/recordings/${id}`);
   }
 
   listAttachments(params: { roomId?: number; status?: string; limit?: number; offset?: number }) {
@@ -252,10 +221,6 @@ export class AdminApi {
 
   updateSettings(settings: Partial<Settings>) {
     return this.request<{ settings: Settings }>('PUT', '/admin/settings', settings);
-  }
-
-  recordingUrl(roomId: number, recordingId: string) {
-    return `${this.baseUrl}/classrooms/${roomId}/recordings/${recordingId}/download?token=${encodeURIComponent(this.token || '')}`;
   }
 
   attachmentUrl(roomId: number, attachmentId: number) {

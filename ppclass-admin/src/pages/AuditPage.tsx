@@ -61,7 +61,7 @@ export default function AuditPage() {
             onChange={(event) => setRoomId(event.target.value.replace(/\D/g, ''))}
           />
           <input
-            placeholder="动作关键字，如 recording"
+            placeholder="动作关键字，如 room.end"
             value={action}
             onChange={(event) => setAction(event.target.value)}
           />

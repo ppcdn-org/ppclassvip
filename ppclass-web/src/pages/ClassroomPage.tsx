@@ -17,7 +17,6 @@ import {
   type ChatMessage,
   type Classroom,
   type Participant,
-  type Recording,
   type RemoteDesktopMode,
   type RoomSession,
   type WsEvent,
@@ -54,9 +53,6 @@ export default function ClassroomPage() {
   const [streams, setStreams] = useState<Record<string, MediaStream | undefined>>({});
   const [screenOwner, setScreenOwner] = useState<number | null>(null);
   const [recording, setRecording] = useState<RecordingInfo>(null);
-  const [lastRecordingId, setLastRecordingId] = useState('');
-  const [recordings, setRecordings] = useState<Recording[]>([]);
-  const [showRecordings, setShowRecordings] = useState(false);
   const [consentRequest, setConsentRequest] = useState<ConsentRequest>(null);
   const [recorderState, setRecorderState] = useState('idle');
   const [wsStatus, setWsStatus] = useState<LinkStatus>('connecting');
@@ -249,7 +245,6 @@ export default function ClassroomPage() {
         if (!disposed) {
           setLoading(false);
           ws.connect();
-          void loadRecordings();
         }
       }
     })();
@@ -323,17 +318,6 @@ export default function ClassroomPage() {
       for (const message of result.messages) addMessage(message);
     } catch {
       // The next reconnect will retry.
-    }
-  }
-
-  async function loadRecordings() {
-    const api = apiRef.current;
-    if (!api || sessionRef.current?.role !== 'teacher') return;
-    try {
-      const result = await api.listRecordings(roomId);
-      setRecordings(result.recordings);
-    } catch {
-      // The recording panel is best-effort.
     }
   }
 
@@ -428,7 +412,6 @@ export default function ClassroomPage() {
         const state = String(data.state || '');
         if (!state || !id) break;
         if (['completed', 'failed', 'declined', 'purged'].includes(state)) {
-          if (state === 'completed') { setLastRecordingId(id); void loadRecordings(); }
           setRecording(null);
         } else {
           setRecording({ recordingId: id, status: state });
@@ -713,7 +696,6 @@ export default function ClassroomPage() {
       const mic = media.getLocalCameraStream();
       if (!mic) throw new Error('请先开启麦克风');
       const recorder = new ScreenRecorder({
-        uploadChunk: (seq, chunk) => api.uploadRecordingChunk(roomId, recordingId, seq, chunk),
         onState: (state, detail) => {
           setRecorderState(state);
           if (detail) setError(detail);
@@ -729,10 +711,10 @@ export default function ClassroomPage() {
       const info = { recordingId, status: 'recording' };
       recordingRef.current = info;
       setRecording(info);
-      setNotice('录制中：请勿关闭页面，建议戴耳机。');
+      setNotice('录制中：录屏会保存在本机，请勿关闭页面，建议戴耳机。');
     } catch (err) {
       setError(err instanceof Error ? err.message : '开始录屏失败');
-      await api.abortRecording(roomId, recordingId).catch(() => undefined);
+      await api.stopRecording(roomId, recordingId).catch(() => undefined);
       recordingRef.current = null;
       setRecording(null);
       setRecorderState('idle');
@@ -748,21 +730,35 @@ export default function ClassroomPage() {
     if (!api || !recorder || !current) return;
     setRecorderState('stopping');
     try {
-      await recorder.stop();
-      await api.finalizeRecording(roomId, current.recordingId);
-      setLastRecordingId(current.recordingId);
+      const blob = await recorder.stop();
+      saveRecordingFile(blob, current.recordingId);
+      await api.stopRecording(roomId, current.recordingId);
       setRecording(null);
-      void loadRecordings();
-      setNotice('录屏已保存，可在课后下载。');
+      setNotice('录屏已保存到本地。');
     } catch (err) {
       setError(err instanceof Error ? err.message : '结束录屏失败');
-      await api.abortRecording(roomId, current.recordingId).catch(() => undefined);
+      await api.stopRecording(roomId, current.recordingId).catch(() => undefined);
       setRecording(null);
     } finally {
       recorderRef.current = null;
       recordingRef.current = null;
       setRecorderState('idle');
     }
+  }
+
+  function saveRecordingFile(blob: Blob, recordingId: string) {
+    if (blob.size === 0) {
+      setError('录屏内容为空，未生成文件。');
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `ppclass-${roomId}-${recordingId}.webm`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
   }
 
   async function acceptConsent() {
@@ -921,37 +917,6 @@ export default function ClassroomPage() {
       navigate('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : '结束课堂失败');
-    }
-  }
-
-  function openRecording(recordingId: string) {
-    const api = apiRef.current;
-    if (!api) return;
-    window.open(api.recordingUrl(roomId, recordingId), '_blank', 'noopener,noreferrer');
-  }
-
-  async function finalizeExisting(recordingId: string) {
-    const api = apiRef.current;
-    if (!api) return;
-    try {
-      await api.finalizeRecording(roomId, recordingId);
-      await loadRecordings();
-      setLastRecordingId(recordingId);
-      setNotice('录屏已保存。');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '保存录屏失败');
-    }
-  }
-
-  async function abortExisting(recordingId: string) {
-    const api = apiRef.current;
-    if (!api) return;
-    if (!window.confirm('放弃这段未完成的录屏？')) return;
-    try {
-      await api.abortRecording(roomId, recordingId);
-      await loadRecordings();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '放弃录屏失败');
     }
   }
 
@@ -1279,14 +1244,6 @@ export default function ClassroomPage() {
               <button onClick={() => void stopRecording()} disabled={!recorderRef.current}>
                 停止录屏
               </button>
-              <button
-                onClick={() => {
-                  setShowRecordings(true);
-                  void loadRecordings();
-                }}
-              >
-                录屏记录
-              </button>
               <button onClick={() => void muteStudent()} disabled={!activeStudent}>
                 {activeStudent?.muted ? '取消静音学生' : '静音学生'}
               </button>
@@ -1321,7 +1278,7 @@ export default function ClassroomPage() {
 
           <span className="muted small">
             {recorderState === 'recording'
-              ? '录屏上传中…'
+              ? '录屏中（保存到本地）…'
               : recorderState === 'waiting_consent'
                 ? '等待学生确认录屏'
                 : recorderState === 'stopping'
@@ -1440,61 +1397,8 @@ export default function ClassroomPage() {
               </button>
             </div>
           </form>
-          {role === 'teacher' && lastRecordingId && (
-            <button className="ghost small" onClick={() => openRecording(lastRecordingId)}>
-              打开当前录屏
-            </button>
-          )}
         </div>
       </aside>
-
-      {showRecordings && role === 'teacher' && (
-        <div className="modal-backdrop">
-          <div className="modal stack">
-            <div className="row between">
-              <h2 style={{ margin: 0 }}>课堂录屏</h2>
-              <button className="ghost" onClick={() => setShowRecordings(false)}>
-                关闭
-              </button>
-            </div>
-            {recordings.length === 0 ? (
-              <p className="muted">还没有录屏记录。</p>
-            ) : (
-              <div className="stack" style={{ maxHeight: '60vh', overflow: 'auto' }}>
-                {recordings.map((item) => (
-                  <div className="chat-item" key={item.recordingId}>
-                    <div className="chat-meta">
-                      <span>{new Date(item.startedAt).toLocaleString()}</span>
-                      <span>{item.status}</span>
-                    </div>
-                    <div className="small muted">
-                      {item.sizeBytes > 0 ? `${(item.sizeBytes / 1024 / 1024).toFixed(2)} MB` : '尚无文件'} ·
-                      分片 {item.lastChunkSeq + 1}
-                    </div>
-                    <div className="row" style={{ marginTop: '0.4rem' }}>
-                      {['recording', 'interrupted', 'finalizing'].includes(item.status) && (
-                        <button className="primary" onClick={() => void finalizeExisting(item.recordingId)}>
-                          完成保存
-                        </button>
-                      )}
-                      {['recording', 'interrupted', 'pending_consent', 'finalizing'].includes(item.status) && (
-                        <button className="danger" onClick={() => void abortExisting(item.recordingId)}>
-                          放弃
-                        </button>
-                      )}
-                      {item.status === 'completed' && (
-                        <button className="primary" onClick={() => openRecording(item.recordingId)}>
-                          播放/下载
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {remoteModalOpen && role === 'teacher' && (
         <div className="modal-backdrop">

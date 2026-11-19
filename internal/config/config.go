@@ -85,10 +85,7 @@ type ClassroomConfig struct {
 	MaxFileBytes         int64    `yaml:"maxFileBytes"`
 	MaxImageBytes        int64    `yaml:"maxImageBytes"`
 	RoomQuotaBytes       int64    `yaml:"roomQuotaBytes"`
-	MaxChunkBytes        int64    `yaml:"maxChunkBytes"`
-	MaxRecordingBytes    int64    `yaml:"maxRecordingBytes"`
 	AttachmentRetention  Duration `yaml:"attachmentRetention"`
-	RecordingRetention   Duration `yaml:"recordingRetention"`
 	MessageRatePerMinute int      `yaml:"messageRatePerMinute"`
 	UploadRatePerMinute  int      `yaml:"uploadRatePerMinute"`
 	InviteRatePerMinute  int      `yaml:"inviteRatePerMinute"`
@@ -97,7 +94,6 @@ type ClassroomConfig struct {
 type StorageConfig struct {
 	DataDir       string `yaml:"dataDir"`
 	AttachmentDir string `yaml:"attachmentDir"`
-	RecordingDir  string `yaml:"recordingDir"`
 }
 
 type PPCDNConfig struct {
@@ -149,10 +145,7 @@ func Default() Config {
 			MaxFileBytes:         50 << 20,
 			MaxImageBytes:        10 << 20,
 			RoomQuotaBytes:       500 << 20,
-			MaxChunkBytes:        8 << 20,
-			MaxRecordingBytes:    4 << 30,
 			AttachmentRetention:  Duration(365 * 24 * time.Hour),
-			RecordingRetention:   Duration(90 * 24 * time.Hour),
 			MessageRatePerMinute: 120,
 			UploadRatePerMinute:  30,
 			InviteRatePerMinute:  30,
@@ -222,16 +215,12 @@ func applyEnv(cfg *Config) {
 	setInt64(&cfg.Classroom.MaxFileBytes, "PPCLASS_CLASSROOM_MAX_FILE_BYTES")
 	setInt64(&cfg.Classroom.MaxImageBytes, "PPCLASS_CLASSROOM_MAX_IMAGE_BYTES")
 	setInt64(&cfg.Classroom.RoomQuotaBytes, "PPCLASS_CLASSROOM_ROOM_QUOTA_BYTES")
-	setInt64(&cfg.Classroom.MaxChunkBytes, "PPCLASS_CLASSROOM_MAX_CHUNK_BYTES")
-	setInt64(&cfg.Classroom.MaxRecordingBytes, "PPCLASS_CLASSROOM_MAX_RECORDING_BYTES")
 	setDuration(&cfg.Classroom.AttachmentRetention, "PPCLASS_CLASSROOM_ATTACHMENT_RETENTION")
-	setDuration(&cfg.Classroom.RecordingRetention, "PPCLASS_CLASSROOM_RECORDING_RETENTION")
 	setInt(&cfg.Classroom.MessageRatePerMinute, "PPCLASS_CLASSROOM_MESSAGE_RATE_PER_MINUTE")
 	setInt(&cfg.Classroom.UploadRatePerMinute, "PPCLASS_CLASSROOM_UPLOAD_RATE_PER_MINUTE")
 	setInt(&cfg.Classroom.InviteRatePerMinute, "PPCLASS_CLASSROOM_INVITE_RATE_PER_MINUTE")
 	setString(&cfg.Storage.DataDir, "PPCLASS_STORAGE_DATA_DIR")
 	setString(&cfg.Storage.AttachmentDir, "PPCLASS_STORAGE_ATTACHMENT_DIR")
-	setString(&cfg.Storage.RecordingDir, "PPCLASS_STORAGE_RECORDING_DIR")
 	setBool(&cfg.PPCDN.Enabled, "PPCLASS_PPCDN_ENABLED")
 	setString(&cfg.PPCDN.BaseURL, "PPCLASS_PPCDN_BASE_URL")
 	setString(&cfg.PPCDN.AppID, "PPCLASS_PPCDN_APP_ID")
@@ -277,16 +266,13 @@ func (c Config) Validate() error {
 	if c.Classroom.ConsentTTL <= 0 || c.Classroom.IdleTTL <= 0 {
 		return fmt.Errorf("classroom consentTTL and idleTTL must be positive")
 	}
-	if c.Classroom.MaxFileBytes <= 0 || c.Classroom.MaxImageBytes <= 0 || c.Classroom.MaxChunkBytes <= 0 || c.Classroom.MaxRecordingBytes <= 0 {
+	if c.Classroom.MaxFileBytes <= 0 || c.Classroom.MaxImageBytes <= 0 {
 		return fmt.Errorf("classroom size limits must be positive")
 	}
 	if c.Classroom.RoomQuotaBytes < c.Classroom.MaxFileBytes {
 		return fmt.Errorf("classroom roomQuotaBytes must be at least maxFileBytes")
 	}
-	if c.Classroom.MaxRecordingBytes < c.Classroom.MaxChunkBytes {
-		return fmt.Errorf("classroom maxRecordingBytes must be at least maxChunkBytes")
-	}
-	if c.Classroom.AttachmentRetention <= 0 || c.Classroom.RecordingRetention <= 0 {
+	if c.Classroom.AttachmentRetention <= 0 {
 		return fmt.Errorf("classroom retention periods must be positive")
 	}
 	if c.Classroom.MessageRatePerMinute <= 0 || c.Classroom.UploadRatePerMinute <= 0 || c.Classroom.InviteRatePerMinute <= 0 {

@@ -9,13 +9,10 @@ type PlatformSetting struct {
 	MaxFileBytes            int64     `gorm:"not null" json:"maxFileBytes"`
 	MaxImageBytes           int64     `gorm:"not null" json:"maxImageBytes"`
 	RoomQuotaBytes          int64     `gorm:"not null" json:"roomQuotaBytes"`
-	MaxChunkBytes           int64     `gorm:"not null" json:"maxChunkBytes"`
-	MaxRecordingBytes       int64     `gorm:"not null" json:"maxRecordingBytes"`
 	RecordingEnabled        bool      `gorm:"not null;default:true" json:"recordingEnabled"`
 	ConsentTTLSeconds       int       `gorm:"not null" json:"consentTtlSeconds"`
 	IdleTTLSeconds          int       `gorm:"not null" json:"idleTtlSeconds"`
 	AttachmentRetentionDays int       `gorm:"not null" json:"attachmentRetentionDays"`
-	RecordingRetentionDays  int       `gorm:"not null" json:"recordingRetentionDays"`
 	MessageRatePerMinute    int       `gorm:"not null" json:"messageRatePerMinute"`
 	UploadRatePerMinute     int       `gorm:"not null" json:"uploadRatePerMinute"`
 	InviteRatePerMinute     int       `gorm:"not null" json:"inviteRatePerMinute"`

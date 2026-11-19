@@ -290,14 +290,12 @@ func (h *AdminHandler) GetClassroom(c *gin.Context) {
 	if err != nil {
 		h.log.Warn("admin list participants failed", "error", err, "room_id", id)
 	}
-	recordings, _ := h.recordings.ListByRoom(c.Request.Context(), id)
 	attachments, _ := h.attachments.ListByRoom(c.Request.Context(), id)
 	audit, _ := h.audits.ListByRoom(c.Request.Context(), id, 100)
 	OK(c, gin.H{
 		"room":         room,
 		"teacher":      h.userSummary(c.Request.Context(), room.TeacherUserID),
 		"participants": participants,
-		"recordings":   recordings,
 		"attachments":  attachments,
 		"audit":        audit,
 	})
@@ -337,39 +335,6 @@ func (h *AdminHandler) EndClassroom(c *gin.Context) {
 	}
 	h.adminAudit(c, "admin.room.end", "room="+uintString(id)+" title="+room.Title)
 	OK(c, gin.H{"room": updated})
-}
-
-func (h *AdminHandler) ListRecordings(c *gin.Context) {
-	limit, offset := parsePagination(c)
-	roomID, _ := strconv.ParseUint(strings.TrimSpace(c.Query("roomId")), 10, 64)
-	recordings, total, err := h.admin.ListRecordings(c.Request.Context(), roomID, c.Query("status"), limit, offset)
-	if err != nil {
-		h.log.Error("admin list recordings failed", "error", err)
-		FailCode(c, http.StatusInternalServerError, "recordings_failed", "list recordings failed")
-		return
-	}
-	OK(c, gin.H{"recordings": recordings, "total": total, "limit": limit, "offset": offset})
-}
-
-func (h *AdminHandler) DeleteRecording(c *gin.Context) {
-	id, ok := parseUintParam(c, "id")
-	if !ok {
-		return
-	}
-	recording, err := h.recordings.GetByID(c.Request.Context(), id)
-	if err != nil {
-		FailCode(c, http.StatusNotFound, "recording_not_found", "recording not found")
-		return
-	}
-	if h.storage != nil {
-		_ = h.storage.DeleteRecording(recording.RoomID, recording.RecordingID, recording.FileKey)
-	}
-	_ = h.recordings.Update(c.Request.Context(), recording.ID, map[string]any{
-		"status":   model.RecordingStatePurged,
-		"file_key": "",
-	})
-	h.adminAudit(c, "admin.recording.delete", "recording="+recording.RecordingID+" room="+uintString(recording.RoomID))
-	OK(c, gin.H{"deleted": true})
 }
 
 func (h *AdminHandler) ListAttachments(c *gin.Context) {

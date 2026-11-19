@@ -190,9 +190,6 @@ export class PpclassApi {
     return this.request<{
       recordingId: string;
       status: string;
-      chunkSize: number;
-      maxChunkBytes: number;
-      maxRecordingBytes: number;
       consentExpiresAt: string;
     }>('POST', `/classrooms/${roomId}/recordings/start`, { studentAudioAvailable });
   }
@@ -220,49 +217,12 @@ export class PpclassApi {
     );
   }
 
-  async uploadRecordingChunk(roomId: number, recordingId: string, seq: number, chunk: Blob) {
-    const response = await fetch(
-      `${this.baseUrl}/classrooms/${roomId}/recordings/${recordingId}/chunks/${seq}`,
-      {
-        method: 'PUT',
-        headers: this.headers({ 'Content-Type': 'application/octet-stream' }),
-        body: chunk,
-      },
-    );
-    const body = await response.json().catch(() => null);
-    if (!response.ok) {
-      throw new ApiError(response.status, body?.error || '', body?.message || '上传录屏分片失败');
-    }
-    return body.data as { lastChunkSeq: number; receivedBytes: number; duplicate?: boolean };
-  }
-
-  finalizeRecording(roomId: number, recordingId: string) {
-    return this.request<{ recording: Recording }>(
+  stopRecording(roomId: number, recordingId: string) {
+    return this.request<{ recordingId: string; status: string }>(
       'POST',
-      `/classrooms/${roomId}/recordings/${recordingId}/finalize`,
+      `/classrooms/${roomId}/recordings/${recordingId}/stop`,
       null,
     );
-  }
-
-  abortRecording(roomId: number, recordingId: string) {
-    return this.request<{ aborted: boolean }>(
-      'POST',
-      `/classrooms/${roomId}/recordings/${recordingId}/abort`,
-      null,
-    );
-  }
-
-  listRecordings(roomId: number) {
-    return this.request<{ recordings: Recording[] }>(
-      'GET',
-      `/classrooms/${roomId}/recordings`,
-    );
-  }
-
-  recordingUrl(roomId: number, recordingId: string) {
-    return `${this.baseUrl}/classrooms/${roomId}/recordings/${recordingId}/download?token=${encodeURIComponent(
-      this.token || '',
-    )}`;
   }
 
   listAudit(roomId: number, limit = 100) {

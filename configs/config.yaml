@@ -35,10 +35,7 @@ classroom:
   maxFileBytes: 52428800
   maxImageBytes: 10485760
   roomQuotaBytes: 524288000
-  maxChunkBytes: 8388608
-  maxRecordingBytes: 4294967296
   attachmentRetention: 8760h
-  recordingRetention: 2160h
   messageRatePerMinute: 120
   uploadRatePerMinute: 30
   inviteRatePerMinute: 30

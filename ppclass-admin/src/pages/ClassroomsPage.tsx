@@ -3,7 +3,6 @@ import {
   type Attachment,
   type AuditEntry,
   type Participant,
-  type Recording,
   type RoomWithTeacher,
   type TeacherOption,
 } from '../api';
@@ -175,7 +174,6 @@ function ClassroomDetailModal({
     room: { id: number; title: string; state: string; recordingState: string; roomCode: string; createdAt: string };
     teacher?: { email: string; nickname: string };
     participants: Participant[];
-    recordings: Recording[];
     attachments: Attachment[];
     audit: AuditEntry[];
   } | null>(null);
@@ -261,38 +259,6 @@ function ClassroomDetailModal({
                         <td>{item.guest ? '是' : '否'}</td>
                         <td>{formatDate(item.joinedAt)}</td>
                         <td>{formatDate(item.leftAt)}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <h3>录屏</h3>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>录制 ID</th>
-                    <th>状态</th>
-                    <th>大小</th>
-                    <th>开始</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.recordings.length === 0 ? (
-                    <TableEmpty colSpan={5} />
-                  ) : (
-                    data.recordings.map((item) => (
-                      <tr key={item.id}>
-                        <td>{item.id}</td>
-                        <td className="mono">{item.recordingId}</td>
-                        <td>
-                          <StateBadge value={item.status} />
-                        </td>
-                        <td>{formatBytes(item.sizeBytes)}</td>
-                        <td>{formatDate(item.startedAt)}</td>
                       </tr>
                     ))
                   )}

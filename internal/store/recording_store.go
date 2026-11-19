@@ -104,20 +104,6 @@ func (s *RecordingStore) UpdateStatus(ctx context.Context, id uint64, from []str
 	return result.RowsAffected > 0, nil
 }
 
-func (s *RecordingStore) AddChunkSeq(ctx context.Context, id uint64, seq, size int64) (bool, error) {
-	result := s.db.WithContext(ctx).
-		Model(&model.ClassroomRecording{}).
-		Where("id = ? AND last_chunk_seq = ?", id, seq-1).
-		Updates(map[string]any{
-			"last_chunk_seq": seq,
-			"size_bytes":     gorm.Expr("size_bytes + ?", size),
-		})
-	if result.Error != nil {
-		return false, result.Error
-	}
-	return result.RowsAffected > 0, nil
-}
-
 func (s *RecordingStore) ListStalePending(ctx context.Context, before time.Time, limit int) ([]model.ClassroomRecording, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 100
@@ -140,24 +126,6 @@ func (s *RecordingStore) ListStaleRecording(ctx context.Context, before time.Tim
 		Where("status IN ? AND updated_at < ?", []string{
 			model.RecordingStateRecording,
 			model.RecordingStateFinalizing,
-		}, before).
-		Order("id ASC").
-		Limit(limit).
-		Find(&recordings).Error
-	return recordings, err
-}
-
-func (s *RecordingStore) ListExpired(ctx context.Context, before time.Time, limit int) ([]model.ClassroomRecording, error) {
-	if limit <= 0 || limit > 200 {
-		limit = 100
-	}
-	var recordings []model.ClassroomRecording
-	err := s.db.WithContext(ctx).
-		Where("status IN ? AND created_at < ?", []string{
-			model.RecordingStateCompleted,
-			model.RecordingStateInterrupted,
-			model.RecordingStateFailed,
-			model.RecordingStateDeclined,
 		}, before).
 		Order("id ASC").
 		Limit(limit).

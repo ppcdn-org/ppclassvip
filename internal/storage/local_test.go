@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
-	"os"
 	"strings"
 	"testing"
 
@@ -51,46 +50,6 @@ func TestSaveAttachmentRejectsOversize(t *testing.T) {
 func TestAttachmentPathTraversalRejected(t *testing.T) {
 	local := testStorage(t)
 	if _, err := local.OpenAttachment("../secret"); err != ErrInvalidKey {
-		t.Fatalf("err = %v", err)
-	}
-}
-
-func TestRecordingChunksAndFinalize(t *testing.T) {
-	local := testStorage(t)
-	if _, err := local.AppendRecordingChunk("rec1", strings.NewReader("abc"), 1024); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := local.AppendRecordingChunk("rec1", strings.NewReader("def"), 1024); err != nil {
-		t.Fatal(err)
-	}
-	size, err := local.RecordingTempSize("rec1")
-	if err != nil || size != 6 {
-		t.Fatalf("size = %d err = %v", size, err)
-	}
-	stored, err := local.FinalizeRecording(3, "rec1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stored.Size != 6 {
-		t.Fatalf("stored = %#v", stored)
-	}
-	file, err := local.OpenRecording(stored.Key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer file.Close()
-	data, err := io.ReadAll(file)
-	if err != nil || string(data) != "abcdef" {
-		t.Fatalf("data = %q err = %v", data, err)
-	}
-	if _, err := os.Stat(local.recordingTempPath("rec1")); !os.IsNotExist(err) {
-		t.Fatalf("temporary chunk file still exists: %v", err)
-	}
-}
-
-func TestRecordingIDValidation(t *testing.T) {
-	local := testStorage(t)
-	if _, err := local.AppendRecordingChunk("../evil", strings.NewReader("x"), 10); err != ErrInvalidKey {
 		t.Fatalf("err = %v", err)
 	}
 }

@@ -94,11 +94,6 @@ export interface Recording {
   roomId: number;
   recordingId: string;
   uploaderParticipantId: number;
-  format: string;
-  contentType: string;
-  durationSeconds: number;
-  sizeBytes: number;
-  lastChunkSeq: number;
   includesStudentAudio: boolean;
   consentAt?: string;
   consentBy?: number;

@@ -26,7 +26,6 @@ export default function DashboardPage() {
         { label: '用户', value: stats.users, hint: `教师 ${stats.teachers} / 管理员 ${stats.admins}` },
         { label: '课堂', value: stats.rooms, hint: `进行中 ${stats.openRooms}` },
         { label: '已结束课堂', value: stats.endedRooms, hint: '历史课堂' },
-        { label: '录屏', value: stats.recordings, hint: formatBytes(stats.recordingBytes) },
         { label: '附件', value: stats.attachments, hint: formatBytes(stats.attachmentBytes) },
       ]
     : [];

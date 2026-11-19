@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -64,7 +63,6 @@ type ClassroomHandler struct {
 	settings    *settings.Service
 	remote      *store.RemoteDesktopStore
 	control     *realtime.ControlHub
-	recordingMu sync.Map
 }
 
 func NewClassroomHandler(deps ClassroomHandlerDeps) *ClassroomHandler {
@@ -689,25 +687,6 @@ func (h *ClassroomHandler) Delete(c *gin.Context) {
 			}
 		}
 	}
-	type recordingFile struct {
-		roomID      uint64
-		recordingID string
-		fileKey     string
-	}
-	var recordingFiles []recordingFile
-	if h.recordings != nil {
-		if list, err := h.recordings.ListByRoom(ctx, room.ID); err != nil {
-			h.log.Warn("list recordings for delete failed", "error", err, "room_id", room.ID)
-		} else {
-			for _, recording := range list {
-				recordingFiles = append(recordingFiles, recordingFile{
-					roomID:      recording.RoomID,
-					recordingID: recording.RecordingID,
-					fileKey:     recording.FileKey,
-				})
-			}
-		}
-	}
 
 	h.stopRemoteDesktopForRoom(ctx, room.ID, "room_deleted")
 
@@ -725,11 +704,6 @@ func (h *ClassroomHandler) Delete(c *gin.Context) {
 		for _, key := range attachmentKeys {
 			if err := h.storage.DeleteAttachment(key); err != nil {
 				h.log.Warn("delete attachment file failed", "error", err, "room_id", room.ID)
-			}
-		}
-		for _, file := range recordingFiles {
-			if err := h.storage.DeleteRecording(file.roomID, file.recordingID, file.fileKey); err != nil {
-				h.log.Warn("delete recording file failed", "error", err, "room_id", room.ID)
 			}
 		}
 	}
