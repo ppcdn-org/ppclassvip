@@ -1,5 +1,5 @@
 APP := ppclassvip
-CONFIG ?= configs/config.yaml
+CONFIG ?= conf/config.dev.yaml
 EMAIL ?= teacher@example.com
 PASSWORD ?= change-me-123
 NICKNAME ?= Teacher

@@ -24,4 +24,5 @@ coverage.out
 Thumbs.db
 
 # Local config overrides
-configs/config.local.yaml
+conf/config.local.yaml
+conf/config.*.local.yaml

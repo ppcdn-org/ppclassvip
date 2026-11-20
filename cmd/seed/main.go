@@ -20,7 +20,7 @@ import (
 )
 
 func main() {
-	configPath := flag.String("config", "configs/config.yaml", "path to config file")
+	configPath := flag.String("config", "conf/config.dev.yaml", "path to config file")
 	email := flag.String("email", "", "teacher/admin email")
 	password := flag.String("password", "", "password (at least 8 characters)")
 	nickname := flag.String("nickname", "", "display name")

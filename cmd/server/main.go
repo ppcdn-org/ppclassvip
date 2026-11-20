@@ -29,7 +29,7 @@ import (
 )
 
 func main() {
-	configPath := flag.String("config", "configs/config.yaml", "path to config file")
+	configPath := flag.String("config", "conf/config.dev.yaml", "path to config file")
 	flag.Parse()
 
 	_ = godotenv.Load()

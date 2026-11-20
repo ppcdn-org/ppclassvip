@@ -856,7 +856,7 @@ SLO 建议：
 - `internal/store/user_store.go`：用户查询。
 - `internal/middleware/`：请求 ID、访问日志、panic 恢复、CORS、JWT 鉴权。
 - `internal/api/`：路由、登录、`/auth/me`、健康检查、统一响应。
-- `configs/config.yaml`、`.env.example`、`docker-compose.yml`、`Makefile`、`README.md`。
+- `conf/config.dev.yaml`、`.env.example`、`docker-compose.yml`、`Makefile`、`README.md`。
 
 **ppClassVip 已新增（后端 P1）**
 

@@ -45,7 +45,7 @@ internal/
   storage/           本地附件存储
   store/             数据访问
   version/           构建版本
-configs/config.yaml  本地开发配置
+conf/config.{env}.yaml  按环境命名的配置（如 dev/prod）
 docs/roadmap/        产品与技术规划
 ppclass-web/         教师/学生课堂前端（React + Vite）
 ppclass-admin/       管理后台前端（React + Vite）
@@ -74,7 +74,7 @@ FLUSH PRIVILEGES;
 
 ### 2. 配置
 
-默认配置在 `configs/config.yaml`。本地可以复制环境变量样例：
+配置文件按环境命名，规则是 `conf/config.{env}.yaml`：开发用 `conf/config.dev.yaml`，生产用 `conf/config.prod.yaml`，启动时通过 `-config` 指定。仓库自带 `conf/config.dev.yaml`，本地可以复制环境变量样例：
 
 ```powershell
 Copy-Item .env.example .env
@@ -82,14 +82,18 @@ Copy-Item .env.example .env
 
 服务启动时会自动读取 `.env`（如果存在），环境变量优先级高于 YAML。
 
-生产环境必须设置至少 32 位的 `PPCLASS_JWT_SECRET`，并设置 `PPCLASS_ENV=prod`。
+生产环境必须设置至少 32 位的 `PPCLASS_JWT_SECRET`，并设置 `PPCLASS_ENV=prod`，使用 `conf/config.prod.yaml` 启动：
+
+```bash
+./ppclassvip -config conf/config.prod.yaml
+```
 
 ### 3. 启动服务
 
 开发时可以直接从仓库根目录启动：
 
 ```bash
-go run ./cmd/server -config configs/config.yaml
+go run ./cmd/server -config conf/config.dev.yaml
 ```
 
 或：
@@ -105,17 +109,17 @@ bin/
   ppclassvip.exe
   ppclassseed.exe
   .env
-  conf/config.local.yaml
-  logs/
+  conf/config.dev.yaml
+  logs/ppclassvip.log
   data/
 ```
 
 ```powershell
 cd bin
-.\ppclassvip.exe -config conf/config.local.yaml
+.\ppclassvip.exe -config conf/config.dev.yaml
 ```
 
-`dataDir: ./data`、`.env` 都是相对 `bin/` 解析；stdout/stderr 需要重定向到 `bin/logs/`（应用本身不写文件日志）。
+`dataDir: ./data`、`.env` 都是相对 `bin/` 解析。日志默认同时写入 `logs/ppclassvip.log`（由 `log.file` 或 `PPCLASS_LOG_FILE` 配置），stdout/stderr 仍保留，便于前台运行和 systemd/journal 查看。
 
 检查：
 
@@ -128,7 +132,7 @@ curl http://localhost:18080/api/v1/ping
 
 ```bash
 go run ./cmd/seed \
-  -config configs/config.yaml \
+  -config conf/config.dev.yaml \
   -email teacher@example.com \
   -password "change-me-123" \
   -nickname "Teacher" \
@@ -145,7 +149,7 @@ make seed EMAIL=teacher@example.com PASSWORD=change-me-123 NICKNAME=Teacher ROLE
 
 ```powershell
 cd bin
-.\ppclassseed.exe -config conf/config.local.yaml -email teacher@example.com -password "change-me-123" -nickname "Teacher" -role teacher
+.\ppclassseed.exe -config conf/config.dev.yaml -email teacher@example.com -password "change-me-123" -nickname "Teacher" -role teacher
 ```
 
 ### 5. 登录
@@ -325,6 +329,7 @@ const ws = new WebSocket(
 | `PPCLASS_CLASSROOM_ROOM_TOKEN_TTL` | 课堂 room token 有效期，默认 `12h` |
 | `PPCLASS_LOG_LEVEL` | `debug` / `info` / `warn` / `error` |
 | `PPCLASS_LOG_FORMAT` | `text` / `json` |
+| `PPCLASS_LOG_FILE` | 日志文件路径，默认 `logs/ppclassvip.log`；留空则只输出到 stdout |
 | `PPCLASS_HTTP_CORS_ORIGINS` | 逗号分隔的前端源 |
 | `PPCLASS_CLASSROOM_CONSENT_TTL` | 学生录屏确认超时，默认 `60s` |
 | `PPCLASS_CLASSROOM_IDLE_TTL` | 空闲课堂回收时间，默认 `4h` |

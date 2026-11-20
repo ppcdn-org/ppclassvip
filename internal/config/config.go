@@ -60,6 +60,7 @@ type HTTPConfig struct {
 type LogConfig struct {
 	Level  string `yaml:"level"`
 	Format string `yaml:"format"`
+	File   string `yaml:"file"`
 }
 
 type MySQLConfig struct {
@@ -124,6 +125,7 @@ func Default() Config {
 		Log: LogConfig{
 			Level:  "info",
 			Format: "text",
+			File:   "logs/ppclassvip.log",
 		},
 		MySQL: MySQLConfig{
 			DSN:             "root:ppclassvip@tcp(127.0.0.1:3306)/ppclassvip?charset=utf8mb4&parseTime=True&loc=Local",
@@ -199,6 +201,7 @@ func applyEnv(cfg *Config) {
 	}
 	setString(&cfg.Log.Level, "PPCLASS_LOG_LEVEL")
 	setString(&cfg.Log.Format, "PPCLASS_LOG_FORMAT")
+	setString(&cfg.Log.File, "PPCLASS_LOG_FILE")
 	setString(&cfg.MySQL.DSN, "PPCLASS_MYSQL_DSN")
 	setInt(&cfg.MySQL.MaxOpenConns, "PPCLASS_MYSQL_MAX_OPEN_CONNS")
 	setInt(&cfg.MySQL.MaxIdleConns, "PPCLASS_MYSQL_MAX_IDLE_CONNS")

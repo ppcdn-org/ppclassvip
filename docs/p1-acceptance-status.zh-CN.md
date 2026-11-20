@@ -3,7 +3,7 @@
 | 项 | 内容 |
 | --- | --- |
 | 日期 | 2026-11-02 |
-| 后端 | `bin/ppclassvip.exe -config conf/config.local.yaml`，`:18080` |
+| 后端 | `bin/ppclassvip.exe -config conf/config.dev.yaml`，`:18080` |
 | 前端 | `ppclass-web`，`http://127.0.0.1:5173` |
 | 数据库 | 本机 MySQL 8，库 `ppclass` |
 | PPCDN | 已启用，`https://api.pp-cdn.org`，appId/deviceId 见本机 `bin/.env`（未提交） |
@@ -105,5 +105,5 @@ npm run dev
 
 ```powershell
 cd D:\gitlab\ppcdn\ppClassVip\bin
-.\ppclassvip.exe -config conf/config.local.yaml
+.\ppclassvip.exe -config conf/config.dev.yaml
 ```
